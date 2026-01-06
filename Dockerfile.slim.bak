@@ -1,0 +1,49 @@
+# 多阶段构建 - 轻量化版
+FROM python:3.12-slim-bookworm AS builder
+
+WORKDIR /app
+
+# 只安装编译时需要的依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    libgeos-dev \
+    libspatialindex-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制项目文件
+COPY pyproject.toml README.md ./
+COPY babeldoc ./babeldoc
+
+# 安装 Python 依赖到指定目录
+RUN pip install --upgrade pip && \
+    pip install --prefix=/install -e .
+
+# ==================== 运行时镜像 ====================
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+# 只安装运行时必需的依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libgeos-c1v5 \
+    libspatialindex6 \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# 从构建阶段复制安装的包
+COPY --from=builder /install /usr/local
+COPY --from=builder /app /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+ENTRYPOINT ["babeldoc"]
+CMD ["--help"]

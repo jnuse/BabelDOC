@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提交翻译任务 - BabelDOC</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">📄 BabelDOC</h1>
+            <div class="nav-links">
+                <a href="submit.html" class="active">提交任务</a>
+                <a href="tasks.html">任务列表</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2>📤 提交翻译任务</h2>
+        
+        <form id="submitForm" class="task-form">
+            <div class="form-group">
+                <label for="file">选择PDF文件 *</label>
+                <input type="file" id="file" name="file" accept=".pdf" required>
+                <div class="help-text">支持最大100MB的PDF文件</div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lang_in">源语言</label>
+                    <select id="lang_in" name="lang_in">
+                        <option value="en">英语 (English)</option>
+                        <option value="zh">中文 (Chinese)</option>
+                        <option value="ja">日语 (Japanese)</option>
+                        <option value="ko">韩语 (Korean)</option>
+                        <option value="fr">法语 (French)</option>
+                        <option value="de">德语 (German)</option>
+                        <option value="es">西班牙语 (Spanish)</option>
+                        <option value="ru">俄语 (Russian)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="lang_out">目标语言</label>
+                    <select id="lang_out" name="lang_out">
+                        <option value="zh">中文 (Chinese)</option>
+                        <option value="en">英语 (English)</option>
+                        <option value="ja">日语 (Japanese)</option>
+                        <option value="ko">韩语 (Korean)</option>
+                        <option value="fr">法语 (French)</option>
+                        <option value="de">德语 (German)</option>
+                        <option value="es">西班牙语 (Spanish)</option>
+                        <option value="ru">俄语 (Russian)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="pages">页码范围（可选）</label>
+                <input type="text" id="pages" name="pages" placeholder="例如: 1-5 或 1,3,5">
+                <div class="help-text">留空表示翻译全部页面</div>
+            </div>
+            
+            <!-- OpenAI 配置 -->
+            <div class="advanced-section">
+                <h3 onclick="toggleSection('openai-section')">🤖 OpenAI 配置 <span class="toggle-icon">▼</span></h3>
+                <div id="openai-section" class="section-content" style="display: none;">
+                    <div class="help-text" style="margin-bottom: 15px;">
+                        三个字段（API Key、模型、Base URL）要么全部填写，要么全部留空使用环境变量默认配置
+                    </div>
+                    <div class="form-group">
+                        <label for="openai-api-key">API Key</label>
+                        <input type="password" id="openai-api-key" name="openai-api-key" placeholder="留空使用环境变量">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="openai-model">模型</label>
+                            <input type="text" id="openai-model" name="openai-model" placeholder="留空使用环境变量">
+                        </div>
+                        <div class="form-group">
+                            <label for="openai-base-url">Base URL</label>
+                            <input type="text" id="openai-base-url" name="openai-base-url" placeholder="留空使用环境变量">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-system-prompt">自定义系统提示词</label>
+                        <input type="text" id="custom-system-prompt" name="custom-system-prompt" placeholder="可选">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="rate-limit-type">速率限制类型</label>
+                            <select id="rate-limit-type" onchange="updateRateLimitInput()">
+                                <option value="rpm" selected>RPM (每分钟请求)</option>
+                                <option value="qps">QPS (每秒查询)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="rate-limit-value">
+                                <span id="rate-limit-label">RPM限制</span>
+                                <small style="color: #666;">(低频API推荐)</small>
+                            </label>
+                            <input type="number" id="rate-limit-value" name="rpm" value="10" min="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="min-text-length">最小文本长度</label>
+                            <input type="number" id="min-text-length" name="min-text-length" placeholder="5">
+                        </div>
+                        <div class="form-group">
+                            <!-- 占位 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PDF 处理选项 -->
+            <div class="advanced-section">
+                <h3 onclick="toggleSection('pdf-section')">📄 PDF 处理选项 <span class="toggle-icon">▼</span></h3>
+                <div id="pdf-section" class="section-content" style="display: none;">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="skip-clean" value="true">
+                            跳过PDF清理 (提高兼容性但增加文件大小)
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="enhance-compatibility" value="true">
+                            启用所有兼容性增强选项
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="watermark-output-mode">水印输出模式</label>
+                        <select id="watermark-output-mode" name="watermark-output-mode">
+                            <option value="">默认 (添加水印)</option>
+                            <option value="no_watermark">不添加水印</option>
+                            <option value="both">输出两个版本</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="max-pages-per-part">每部分最大页数（分割翻译）</label>
+                        <input type="number" id="max-pages-per-part" name="max-pages-per-part" placeholder="留空不分割">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="ignore-cache" value="true">
+                            忽略翻译缓存
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="no-dual" value="true">
+                            不输出双语PDF
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="no-mono" value="true">
+                            不输出单语PDF
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span id="submitText">🚀 提交任务</span>
+                <span id="submitSpinner" class="spinner" style="display: none;"></span>
+            </button>
+        </form>
+
+        <div id="message" class="message" style="display: none;"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('submitForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitSpinner = document.getElementById('submitSpinner');
+        const message = document.getElementById('message');
+
+        // 速率限制类型切换
+        function updateRateLimitInput() {
+            const type = document.getElementById('rate-limit-type').value;
+            const label = document.getElementById('rate-limit-label');
+            const input = document.getElementById('rate-limit-value');
+            
+            if (type === 'rpm') {
+                label.innerHTML = 'RPM限制 <small style="color: #666;">(低频API推荐)</small>';
+                input.name = 'rpm';
+                input.value = '10';
+                input.placeholder = '10';
+            } else {
+                label.innerHTML = 'QPS限制 <small style="color: #666;">(高频API)</small>';
+                input.name = 'qps';
+                input.value = '4';
+                input.placeholder = '4';
+            }
+        }
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const icon = event.currentTarget.querySelector('.toggle-icon');
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                section.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            submitBtn.disabled = true;
+            submitText.style.display = 'none';
+            submitSpinner.style.display = 'inline-block';
+
+            // 验证 OpenAI 三个字段：要么全填，要么全不填
+            // 更新速率限制参数名称
+            const rateLimitType = document.getElementById('rate-limit-type').value;
+            const rateLimitInput = document.getElementById('rate-limit-value');
+            rateLimitInput.name = rateLimitType; // 动态设置参数名为 rpm 或 qps
+            
+            const apiKey = document.getElementById('openai-api-key').value.trim();
+            const model = document.getElementById('openai-model').value.trim();
+            const baseUrl = document.getElementById('openai-base-url').value.trim();
+            
+            const filledCount = [apiKey, model, baseUrl].filter(v => v !== '').length;
+            
+            if (filledCount > 0 && filledCount < 3) {
+                showMessage('error', '❌ OpenAI 配置错误：API Key、模型和 Base URL 必须全部填写或全部留空（留空使用环境变量默认配置）');
+                submitBtn.disabled = false;
+                submitText.style.display = 'inline';
+                submitSpinner.style.display = 'none';
+                return;
+            }
+
+            const formData = new FormData(form);
+            
+            // 确保未选中的复选框不会被提交
+            const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                if (!checkbox.checked) {
+                    formData.delete(checkbox.name);
+                }
+            });
+            
+            // 移除空值字段，避免传递无效参数
+            for (let [key, value] of [...formData.entries()]) {
+                if (value === '' || value === 'null' || value === 'undefined') {
+                    formData.delete(key);
+                }
+            }
+
+            try {
+                const response = await fetch('/api/tasks/submit', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('success', `✅ 任务提交成功！任务ID: ${data.task_id}`);
+                    form.reset();
+                    
+                    setTimeout(() => {
+                        window.location.href = `detail.html?id=${data.task_id}`;
+                    }, 1500);
+                } else {
+                    showMessage('error', '❌ 任务提交失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                showMessage('error', '❌ 网络错误: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitText.style.display = 'inline';
+                submitSpinner.style.display = 'none';
+            }
+        });
+
+        function showMessage(type, text) {
+            message.className = `message ${type}`;
+            message.textContent = text;
+            message.style.display = 'block';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

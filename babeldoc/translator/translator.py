@@ -29,13 +29,28 @@ class RateLimiter:
     """
     A rate limiter using the leaky bucket algorithm to ensure a smooth, constant rate of requests.
     This implementation is thread-safe and robust against system clock changes.
+    Supports both QPS (Queries Per Second) and RPM (Requests Per Minute) rate limiting.
     """
 
-    def __init__(self, max_qps: int):
-        if max_qps <= 0:
-            raise ValueError("max_qps must be a positive number")
-        self.max_qps = max_qps
-        self.min_interval = 1.0 / max_qps
+    def __init__(self, max_qps: int = None, max_rpm: int = None):
+        if max_qps is not None and max_rpm is not None:
+            raise ValueError("Cannot specify both max_qps and max_rpm")
+        if max_qps is None and max_rpm is None:
+            raise ValueError("Must specify either max_qps or max_rpm")
+        
+        if max_qps is not None:
+            if max_qps <= 0:
+                raise ValueError("max_qps must be a positive number")
+            self.max_qps = max_qps
+            self.max_rpm = None
+            self.min_interval = 1.0 / max_qps
+        else:
+            if max_rpm <= 0:
+                raise ValueError("max_rpm must be a positive number")
+            self.max_qps = None
+            self.max_rpm = max_rpm
+            self.min_interval = 60.0 / max_rpm
+        
         self.lock = threading.Lock()
         # Use monotonic time to prevent issues with system time changes
         self.next_request_time = time.monotonic()
@@ -66,14 +81,32 @@ class RateLimiter:
             raise ValueError("max_qps must be a positive number")
         with self.lock:
             self.max_qps = max_qps
+            self.max_rpm = None
             self.min_interval = 1.0 / max_qps
+    
+    def set_max_rpm(self, max_rpm: int):
+        """
+        Updates the maximum requests per minute. This operation is thread-safe.
+        """
+        if max_rpm <= 0:
+            raise ValueError("max_rpm must be a positive number")
+        with self.lock:
+            self.max_rpm = max_rpm
+            self.max_qps = None
+            self.min_interval = 60.0 / max_rpm
 
 
-_translate_rate_limiter = RateLimiter(5)
+_translate_rate_limiter = RateLimiter(max_qps=5)
 
 
-def set_translate_rate_limiter(max_qps):
-    _translate_rate_limiter.set_max_qps(max_qps)
+def set_translate_rate_limiter(max_qps=None, max_rpm=None):
+    """Set rate limiter with either QPS or RPM."""
+    if max_qps is not None:
+        _translate_rate_limiter.set_max_qps(max_qps)
+    elif max_rpm is not None:
+        _translate_rate_limiter.set_max_rpm(max_rpm)
+    else:
+        raise ValueError("Must specify either max_qps or max_rpm")
 
 
 class BaseTranslator(ABC):

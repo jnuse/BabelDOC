@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务列表 - BabelDOC</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">📄 BabelDOC</h1>
+            <div class="nav-links">
+                <a href="submit.html">提交任务</a>
+                <a href="tasks.html" class="active">任务列表</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-row">
+            <h2>📋 任务列表</h2>
+            <button class="btn btn-secondary" onclick="loadTasks()">🔄 刷新</button>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+        </div>
+
+        <div id="taskList" class="task-list"></div>
+        <div id="emptyMessage" class="empty-message" style="display: none;">
+            <p>📭 暂无任务</p>
+            <a href="submit.html" class="btn btn-primary">提交新任务</a>
+        </div>
+    </div>
+
+    <script>
+        let tasks = [];
+
+        async function loadTasks() {
+            const loading = document.getElementById('loading');
+            const taskList = document.getElementById('taskList');
+            const emptyMessage = document.getElementById('emptyMessage');
+
+            loading.style.display = 'block';
+            taskList.innerHTML = '';
+            emptyMessage.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/tasks/list');
+                const data = await response.json();
+
+                loading.style.display = 'none';
+
+                // 检查是否是错误响应
+                if (data.error || data.success === false) {
+                    taskList.innerHTML = `<div class="error-message">❌ 加载失败: ${data.error || '未知错误'}</div>`;
+                    return;
+                }
+
+                // 确保data是数组
+                tasks = Array.isArray(data) ? data : [];
+
+                if (tasks.length === 0) {
+                    emptyMessage.style.display = 'block';
+                    return;
+                }
+
+                taskList.innerHTML = tasks.map(task => renderTask(task)).join('');
+            } catch (error) {
+                loading.style.display = 'none';
+                taskList.innerHTML = `<div class="error-message">❌ 加载失败: ${error.message}</div>`;
+            }
+        }
+
+        function renderTask(task) {
+            const statusInfo = getStatusInfo(task.status);
+            const createdAt = new Date(task.created_at).toLocaleString('zh-CN');
+            const duration = task.completed_at 
+                ? getDuration(task.started_at, task.completed_at)
+                : (task.started_at ? `运行中 (${getDuration(task.started_at, new Date())})` : '-');
+
+            return `
+                <div class="task-card">
+                    <div class="task-header">
+                        <h3 class="task-filename">${task.filename}</h3>
+                        <span class="task-status status-${task.status}">${statusInfo.icon} ${statusInfo.text}</span>
+                    </div>
+                    <div class="task-info">
+                        <div class="task-meta">
+                            <span><strong>ID:</strong> ${task.id}</span>
+                            <span><strong>语言:</strong> ${task.lang_in} → ${task.lang_out}</span>
+                            ${task.pages ? `<span><strong>页码:</strong> ${task.pages}</span>` : ''}
+                        </div>
+                        <div class="task-time">
+                            <span><strong>创建时间:</strong> ${createdAt}</span>
+                            <span><strong>耗时:</strong> ${duration}</span>
+                        </div>
+                        ${task.error ? `<div class="task-error">❌ ${task.error}</div>` : ''}
+                    </div>
+                    <div class="task-actions">
+                        <a href="detail.html?id=${task.id}" class="btn btn-primary btn-sm">查看详情</a>
+                        ${renderDownloadButtons(task)}
+                        <button class="btn btn-danger btn-sm" onclick="deleteTask('${task.id}')">🗑️ 删除</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDownloadButtons(task) {
+            if (task.status !== 'success') {
+                return '';
+            }
+            
+            // 如果有多个输出文件
+            if (task.output_files && task.output_files.length > 0) {
+                return task.output_files.map(file => {
+                    let label = '📥 下载';
+                    if (file.includes('dual') || file.includes('bilingual')) {
+                        label = '📥 双语';
+                    } else if (file.includes('mono') || file.includes('monolingual')) {
+                        label = '📥 单语';
+                    } else if (task.output_files.length > 1) {
+                        const index = task.output_files.indexOf(file) + 1;
+                        label = `📥 文件${index}`;
+                    }
+                    return `<a href="/api/tasks/download/${task.id}?file=${encodeURIComponent(file)}" class="btn btn-success btn-sm" download>${label}</a>`;
+                }).join(' ');
+            }
+            
+            // 向后兼容：只有output_file字段
+            if (task.output_file) {
+                return `<a href="/api/tasks/download/${task.id}" class="btn btn-success btn-sm" download>📥 下载结果</a>`;
+            }
+            
+            return '';
+        }
+
+        function getStatusInfo(status) {
+            const statusMap = {
+                'queued': { icon: '⏳', text: '排队中' },
+                'running': { icon: '▶️', text: '运行中' },
+                'success': { icon: '✅', text: '成功' },
+                'failed': { icon: '❌', text: '失败' }
+            };
+            return statusMap[status] || { icon: '❓', text: status };
+        }
+
+        function getDuration(start, end) {
+            const startTime = new Date(start);
+            const endTime = typeof end === 'string' ? new Date(end) : end;
+            const diff = Math.floor((endTime - startTime) / 1000);
+
+            if (diff < 60) return `${diff}秒`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}分${diff % 60}秒`;
+            return `${Math.floor(diff / 3600)}小时${Math.floor((diff % 3600) / 60)}分`;
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('确定要删除这个任务吗？这将删除所有相关文件和日志。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/tasks/delete/${taskId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('✅ 删除成功');
+                    loadTasks();
+                } else {
+                    alert('❌ 删除失败');
+                }
+            } catch (error) {
+                alert('❌ 删除失败: ' + error.message);
+            }
+        }
+
+        // 自动刷新
+        function startAutoRefresh() {
+            setInterval(() => {
+                const hasRunningTasks = tasks.some(t => t.status === 'running' || t.status === 'queued');
+                if (hasRunningTasks) {
+                    loadTasks();
+                }
+            }, 5000); // 每5秒刷新一次
+        }
+
+        // 页面加载时获取任务列表
+        loadTasks();
+        startAutoRefresh();
+    </script>
+</body>
+</html>

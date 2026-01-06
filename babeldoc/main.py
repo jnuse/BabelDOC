@@ -149,8 +149,14 @@ def create_parser():
         "--qps",
         "-q",
         type=int,
-        default=4,
-        help="QPS limit of translation service",
+        default=None,
+        help="QPS (Queries Per Second) limit of translation service. Cannot be used with --rpm.",
+    )
+    translation_group.add_argument(
+        "--rpm",
+        type=int,
+        default=None,
+        help="RPM (Requests Per Minute) limit of translation service. Use this for low-rate APIs (e.g., 30 RPM). Cannot be used with --qps.",
     )
     translation_group.add_argument(
         "--ignore-cache",
@@ -488,6 +494,13 @@ async def main():
     if not args.openai:
         parser.error("必须选择一个翻译服务：--openai")
 
+    # 验证速率限制参数
+    if args.qps is not None and args.rpm is not None:
+        parser.error("不能同时指定 --qps 和 --rpm 参数")
+    if args.qps is None and args.rpm is None:
+        # 默认使用 4 QPS
+        args.qps = 4
+
     # 验证 OpenAI 参数
     if args.openai and not args.openai_api_key:
         parser.error("使用 OpenAI 服务时必须提供 API key")
@@ -539,7 +552,12 @@ async def main():
         raise ValueError("Invalid translator type")
 
     # 设置翻译速率限制
-    set_translate_rate_limiter(args.qps)
+    if args.qps is not None:
+        set_translate_rate_limiter(max_qps=args.qps)
+        logger.info(f"Rate limiter set to {args.qps} QPS")
+    elif args.rpm is not None:
+        set_translate_rate_limiter(max_rpm=args.rpm)
+        logger.info(f"Rate limiter set to {args.rpm} RPM ({args.rpm/60:.2f} QPS)")
     # 初始化文档布局模型
     if args.rpc_doclayout:
         from babeldoc.docvision.rpc_doclayout import RpcDocLayoutModel

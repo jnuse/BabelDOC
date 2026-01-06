@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务详情 - BabelDOC</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">📄 BabelDOC</h1>
+            <div class="nav-links">
+                <a href="submit.html">提交任务</a>
+                <a href="tasks.html">任务列表</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-row">
+            <h2>📊 任务详情</h2>
+            <a href="tasks.html" class="btn btn-secondary">← 返回列表</a>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+        </div>
+
+        <div id="taskDetail" style="display: none;">
+            <div class="detail-card">
+                <div class="detail-header">
+                    <h3 id="taskFilename"></h3>
+                    <span id="taskStatus" class="task-status"></span>
+                </div>
+                <div class="detail-info">
+                    <div class="info-row">
+                        <span class="info-label">任务ID:</span>
+                        <span id="taskId"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">语言转换:</span>
+                        <span id="taskLang"></span>
+                    </div>
+                    <div class="info-row" id="pagesRow" style="display: none;">
+                        <span class="info-label">页码范围:</span>
+                        <span id="taskPages"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">创建时间:</span>
+                        <span id="taskCreated"></span>
+                    </div>
+                    <div class="info-row" id="startedRow" style="display: none;">
+                        <span class="info-label">开始时间:</span>
+                        <span id="taskStarted"></span>
+                    </div>
+                    <div class="info-row" id="completedRow" style="display: none;">
+                        <span class="info-label">完成时间:</span>
+                        <span id="taskCompleted"></span>
+                    </div>
+                    <div class="info-row" id="durationRow" style="display: none;">
+                        <span class="info-label">耗时:</span>
+                        <span id="taskDuration"></span>
+                    </div>
+                    <div id="errorRow" class="error-box" style="display: none;">
+                        <strong>错误信息:</strong>
+                        <p id="taskError"></p>
+                    </div>
+                </div>
+                <div class="detail-actions">
+                    <button id="refreshBtn" class="btn btn-secondary" onclick="loadTask()">🔄 刷新</button>
+                    <div id="downloadBtns" style="display: inline-block;"></div>
+                    <button id="deleteBtn" class="btn btn-danger" onclick="deleteTask()">🗑️ 删除任务</button>
+                </div>
+            </div>
+
+            <div class="log-card">
+                <div class="log-header">
+                    <h3>📝 任务日志</h3>
+                    <button class="btn btn-secondary btn-sm" onclick="loadLogs()">🔄 刷新日志</button>
+                </div>
+                <div id="logContent" class="log-content">
+                    <div class="log-loading">加载日志中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const taskId = urlParams.get('id');
+        let currentTask = null;
+        let autoRefreshInterval = null;
+
+        if (!taskId) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('errorMessage').textContent = '❌ 无效的任务ID';
+            document.getElementById('errorMessage').style.display = 'block';
+        } else {
+            loadTask();
+            loadLogs();
+            startAutoRefresh();
+        }
+
+        async function loadTask() {
+            try {
+                const response = await fetch(`/api/tasks/detail/${taskId}`);
+                if (!response.ok) {
+                    throw new Error('任务不存在');
+                }
+
+                currentTask = await response.json();
+                renderTask(currentTask);
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('taskDetail').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorMessage').textContent = '❌ ' + error.message;
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        }
+
+        function renderTask(task) {
+            const statusInfo = getStatusInfo(task.status);
+
+            document.getElementById('taskFilename').textContent = task.filename;
+            document.getElementById('taskStatus').className = `task-status status-${task.status}`;
+            document.getElementById('taskStatus').textContent = `${statusInfo.icon} ${statusInfo.text}`;
+            document.getElementById('taskId').textContent = task.id;
+            document.getElementById('taskLang').textContent = `${task.lang_in} → ${task.lang_out}`;
+            document.getElementById('taskCreated').textContent = new Date(task.created_at).toLocaleString('zh-CN');
+
+            if (task.pages) {
+                document.getElementById('pagesRow').style.display = 'flex';
+                document.getElementById('taskPages').textContent = task.pages;
+            }
+
+            if (task.started_at) {
+                document.getElementById('startedRow').style.display = 'flex';
+                document.getElementById('taskStarted').textContent = new Date(task.started_at).toLocaleString('zh-CN');
+            }
+
+            if (task.completed_at) {
+                document.getElementById('completedRow').style.display = 'flex';
+                document.getElementById('taskCompleted').textContent = new Date(task.completed_at).toLocaleString('zh-CN');
+                
+                document.getElementById('durationRow').style.display = 'flex';
+                document.getElementById('taskDuration').textContent = getDuration(task.started_at, task.completed_at);
+            }
+
+            if (task.error) {
+                document.getElementById('errorRow').style.display = 'block';
+                document.getElementById('taskError').textContent = task.error;
+            }
+
+            // 下载按钮
+            const downloadBtns = document.getElementById('downloadBtns');
+            downloadBtns.innerHTML = '';
+            
+            if (task.status === 'success' && task.output_files && task.output_files.length > 0) {
+                // 如果有多个输出文件，显示多个下载按钮
+                task.output_files.forEach((file, index) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-success';
+                    btn.style.marginRight = '5px';
+                    
+                    // 根据文件名判断类型
+                    let label = '📥 下载';
+                    if (file.includes('dual') || file.includes('bilingual')) {
+                        label = '📥 下载双语版';
+                    } else if (file.includes('mono') || file.includes('monolingual')) {
+                        label = '📥 下载单语版';
+                    } else if (task.output_files.length > 1) {
+                        label = `📥 下载文件${index + 1}`;
+                    }
+                    
+                    btn.textContent = label;
+                    btn.onclick = () => {
+                        // 使用文件名直接下载
+                        window.location.href = `/api/tasks/download/${task.id}?file=${encodeURIComponent(file)}`;
+                    };
+                    downloadBtns.appendChild(btn);
+                });
+            } else if (task.status === 'success' && task.output_file) {
+                // 向后兼容：如果只有output_file字段
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-success';
+                btn.textContent = '📥 下载结果';
+                btn.onclick = () => {
+                    window.location.href = `/api/tasks/download/${task.id}`;
+                };
+                downloadBtns.appendChild(btn);
+            }
+        }
+
+        async function loadLogs() {
+            const logContent = document.getElementById('logContent');
+            
+            try {
+                const response = await fetch(`/api/tasks/logs/${taskId}`);
+                const logs = await response.text();
+                
+                if (logs) {
+                    logContent.innerHTML = `<pre>${escapeHtml(logs)}</pre>`;
+                    // 自动滚动到底部
+                    logContent.scrollTop = logContent.scrollHeight;
+                } else {
+                    logContent.innerHTML = '<div class="log-empty">日志文件不存在或任务尚未开始</div>';
+                }
+            } catch (error) {
+                logContent.innerHTML = `<div class="log-error">❌ 加载日志失败: ${error.message}</div>`;
+            }
+        }
+
+        async function deleteTask() {
+            if (!confirm('确定要删除这个任务吗？这将删除所有相关文件和日志。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/tasks/delete/${taskId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('✅ 删除成功');
+                    window.location.href = 'tasks.html';
+                } else {
+                    alert('❌ 删除失败');
+                }
+            } catch (error) {
+                alert('❌ 删除失败: ' + error.message);
+            }
+        }
+
+        function getStatusInfo(status) {
+            const statusMap = {
+                'queued': { icon: '⏳', text: '排队中' },
+                'running': { icon: '▶️', text: '运行中' },
+                'success': { icon: '✅', text: '成功' },
+                'failed': { icon: '❌', text: '失败' }
+            };
+            return statusMap[status] || { icon: '❓', text: status };
+        }
+
+        function getDuration(start, end) {
+            const startTime = new Date(start);
+            const endTime = new Date(end);
+            const diff = Math.floor((endTime - startTime) / 1000);
+
+            if (diff < 60) return `${diff}秒`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}分${diff % 60}秒`;
+            return `${Math.floor(diff / 3600)}小时${Math.floor((diff % 3600) / 60)}分`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(() => {
+                if (currentTask && (currentTask.status === 'running' || currentTask.status === 'queued')) {
+                    loadTask();
+                    loadLogs();
+                } else if (currentTask && (currentTask.status === 'success' || currentTask.status === 'failed')) {
+                    // 任务完成，停止自动刷新
+                    clearInterval(autoRefreshInterval);
+                }
+            }, 3000); // 每3秒刷新一次
+        }
+
+        // 页面卸载时清除定时器
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
