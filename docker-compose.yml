@@ -1,6 +1,6 @@
 services:
   babeldoc:
-    image: ghcr.io/jnuse/babeldoc::latest
+    image: ghcr.io/jnuse/babeldoc:latest
     container_name: babeldoc
     ports:
       - "8080:8080"
