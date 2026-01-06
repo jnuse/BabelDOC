@@ -1,5 +1,15 @@
 <!-- # Yet Another Document Translator -->
 
+本项目基于[BabelDOC](https://github.com/funstory-ai/BabelDOC)做了修改和封装，主要修改如下：
+>1.添加RPM限制  
+>2.写了一个队列式任务后端web服务  
+>3.封装成docker镜像  
+
+主要修改文件为`translator.py`和`main.py`。
+
+
+---
+
 <div align="center">
 <!-- <img src="https://s.immersivetranslate.com/assets/r2-uploads/images/babeldoc-banner.png" width="320px"  alt="YADT"/> -->
 

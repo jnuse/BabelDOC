@@ -68,9 +68,10 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8080
 
 # 生成并恢复离线资源包（包含所有必需的模型和字体）
-RUN babeldoc --generate-offline-assets /tmp/offline-assets && \
-    babeldoc --restore-offline-assets /tmp/offline-assets && \
-    rm -rf /tmp/offline-assets
+# RUN babeldoc --generate-offline-assets /tmp/offline-assets 
+#  && \
+    # babeldoc --restore-offline-assets /tmp/offline-assets && \
+    # rm -rf /tmp/offline-assets
 
 # 暴露 Web 服务端口
 EXPOSE 8080

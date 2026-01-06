@@ -59,3 +59,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+# 第二个 Job：清理旧的运行记录
+  cleanup-runs:
+    runs-on: ubuntu-latest
+    # 关键：在 build-and-push 任务完成后运行
+    needs: build-and-push 
+    # 关键：即使上一个任务失败，也要运行清理
+    if: always() 
+    permissions:
+      # 关键：需要此权限来删除 workflow runs
+      actions: write
+
+    steps:
+      - name: Delete old workflow runs
+        uses: actions/delete-workflow-runs@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 4 # 核心：最少保留4个
